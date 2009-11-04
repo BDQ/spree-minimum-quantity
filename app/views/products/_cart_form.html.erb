@@ -109,9 +109,9 @@
             //product
             var min = minimums[<%= @product.master.id %>]
           }
-          console.log(min)
+ 
           if(value<min){
-            return true;
+            return false;
           }else{
             return true;
           }
