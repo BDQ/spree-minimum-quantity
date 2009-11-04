@@ -1,0 +1,142 @@
+<% form_for :order, :url => orders_url do |f| %>
+
+  <% if product_price(@product) %>
+  <p class="prices">
+    <%= t("price") %>
+    <br />
+    <span class="price selling"><%= product_price(@product) %></span>
+    <% if !@product.has_variants? && !@product.minimum_quantity.nil? %>
+      <p class="minimumDisplayProduct">Minimum Quantity: <%= @product.minimum_quantity.to_s %></p>
+    <% end %>
+  </p>
+  <% end %>
+
+  <% if @product.has_variants? %>
+  <div id="product-variants">
+    <h2><%= t('variants') %></h2>
+    <ul>
+      <%  has_checked = false
+          @product.variants.active.each_with_index do |v,index|
+         		next if v.option_values.empty? || (!v.in_stock && !Spree::Config[:show_zero_stock_products])
+         		checked = !has_checked && (v.in_stock || Spree::Config[:allow_backorders])
+         		has_checked = true if checked %>
+        <li>
+          <label>
+            <%= radio_button_tag "products[#{@product.id}]", v.id, checked, :disabled => !v.in_stock && !Spree::Config[:allow_backorders] %>
+            <%= variant_options v %>
+            <% if variant_price_diff v %>
+              <span class="price diff"><%= variant_price_diff v %></span>
+            <% end %>
+            <% unless v.minimum_quantity.nil? %>
+              <p class="minimumDisplayVariant">Minimum Quantity: <%= v.minimum_quantity.to_s %></p>
+            <% end %>
+          </label>
+        </li>
+        
+        <% content_for :head do %>
+          <script type="text/javascript">
+            jQuery(document).ready(function(){  
+
+              jQuery("#products_<%= @product.id %>_<%= v.id %>").click(function (event) { 
+                  jQuery("#variant-thumbnails").empty();
+                  
+                  jQuery("#variant-images").html('<%= t('images_for') %>: <%= v.options_text %>')
+                  
+                  if(images[<%= v.id %>].length > 0){
+                    <% v.images.each do |i| %>
+                       jQuery("#variant-thumbnails").append('<li><%= link_to(image_tag(i.attachment.url(:mini)), i.attachment.url(:product)) %></li>');
+                    <% end %>
+                    
+                    jQuery("#variant-images").show();
+                  }else{
+                    jQuery("#variant-images").hide();
+                  }
+                  
+                  add_image_handlers();
+                  
+                  var link = jQuery("#variant-thumbnails a")[0];
+  
+                  jQuery("#main-image img").attr({src: jQuery(link).attr('href')});  
+                  jQuery('ul.thumbnails li').removeClass('selected');
+                  jQuery(link).parent('li').addClass('selected');
+                  
+                  var min = <%= v.minimum_quantity.nil? ? 1 : v.minimum_quantity %> 
+                  jQuery("#quantity").val(min);
+               });
+
+            });
+          </script>
+        <% end %>
+      <% end%>
+    </ul>
+  </div>
+  <% end%>						
+  <% if @product.has_stock? || Spree::Config[:allow_backorders] %>
+      <%= text_field_tag (@product.has_variants? ? :quantity : "variants[#{@product.master.id}]"), 
+                     ((!@product.has_variants? && !@product.minimum_quantity.nil?) ? @product.minimum_quantity : 1), :class => "title required number minimumQuantity", :size => 3 %>
+      &nbsp;
+      <button type='submit' class='large primary'>
+        <%= image_tag('/images/add-to-cart.png') + t('add_to_cart') %>
+      </button>
+  <% else %>
+      <%= content_tag('strong', t('out_of_stock')) %>
+  <% end %>
+<% end %>
+
+
+
+<% content_for :head do %>
+  <script type="text/javascript">
+    jQuery(document).ready(function(){
+      var add_to_cart_button = jQuery("#cart-form button[type='submit']");
+      
+      var minimums = {
+        <% if @product.has_variants? %>
+          <%= @product.variants.map{ |v| "#{v.id}:#{v.minimum_quantity.nil? ? 0 : v.minimum_quantity}" }.join(",") %>
+        <% else %>
+          <%= "#{@product.master.id}:#{@product.minimum_quantity}" %>
+        <% end  %>
+      };
+      
+      jQuery.validator.addMethod(
+        "minimumQuantity",
+        function(value, element) {
+  
+          if(element.id=="quantity"){
+            //variant
+            var min = minimums[jQuery("input[name='products[<%= @product.id %>]']:checked").val()];
+          }else{
+            //product
+            var min = minimums[<%= @product.master.id %>]
+          }
+          console.log(min)
+          if(value<min){
+            return true;
+          }else{
+            return true;
+          }
+        },
+        "You must purchase at least the Minimum Quantity specified."
+      );
+
+      jQuery(add_to_cart_button[0].form).validate({
+         errorClass: "minimumError",
+         errorPlacement: function(error, element) {
+             error.insertAfter( add_to_cart_button);
+          }
+      })
+      
+      add_to_cart_button.click(function(){
+        jQuery(add_to_cart_button[0].form).valid();
+      })
+      
+    });
+  </script>
+  
+  <style>
+    .minimumDisplayVariant { margin: 0px 0px 0px 30px;}
+    .minimumDisplayProduct { margin:-25px 0 20px;}
+    label.minimumError{ margin-top:-20px;color:red;float:left;}
+  </style>
+<% end %>
+
